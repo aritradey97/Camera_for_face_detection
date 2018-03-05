@@ -9,16 +9,21 @@ import android.util.Log;
 import android.view.OrientationEventListener;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+import android.view.View;
+import android.widget.Button;
 import android.widget.FrameLayout;
+
+import java.io.IOException;
 import java.util.List;
 
-public class MainActivity extends Activity
-        implements SurfaceHolder.Callback {
+import static android.hardware.Camera.open;
+
+public class MainActivity extends Activity implements SurfaceHolder.Callback {
 
     public static final String TAG = MainActivity.class.getSimpleName();
-
-    private Camera mCamera;
-
+    private int frontcameraId = -1, backcameraId = -1, cameraId;
+    private static Camera mCamera = null;
+    private Button button;
     // We need the phone orientation to correctly draw the overlay:
     private int mOrientation;
     private int mOrientationCompensation;
@@ -27,7 +32,7 @@ public class MainActivity extends Activity
     // Let's keep track of the display rotation and orientation also:
     private int mDisplayRotation;
     private int mDisplayOrientation;
-
+    private CameraPreview mpreview;
     // Holds the Face Detection result:
     private Camera.Face[] mFaces;
 
@@ -56,13 +61,31 @@ public class MainActivity extends Activity
         super.onCreate(savedInstanceState);
         mView = new SurfaceView(this);
 
-        setContentView(mView);
+        setContentView(R.layout.activity_main);
         // Now create the OverlayView:
+        FrameLayout preview = (FrameLayout)findViewById(R.id.camera_preview);
+        preview.addView(mView);
         mFaceView = new FaceOverlayView(this);
         addContentView(mFaceView, new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
         // Create and Start the OrientationListener:
         mOrientationEventListener = new SimpleOrientationEventListener(this);
         mOrientationEventListener.enable();
+        button = (Button)findViewById(R.id.button);
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mCamera.stopPreview();
+                mCamera.release();
+                if(cameraId == Camera.CameraInfo.CAMERA_FACING_BACK)
+                    cameraId = Camera.CameraInfo.CAMERA_FACING_FRONT;
+                else
+                    cameraId = Camera.CameraInfo.CAMERA_FACING_BACK;
+
+                mCamera = open(cameraId);
+                mCamera.startPreview();
+            }
+
+        });
     }
 
     @Override
@@ -86,7 +109,29 @@ public class MainActivity extends Activity
 
     @Override
     public void surfaceCreated(SurfaceHolder surfaceHolder) {
-        mCamera = Camera.open();
+
+        int numberOfCameras = Camera.getNumberOfCameras();
+        for (int i = 0; i < numberOfCameras; i++) {
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            Camera.getCameraInfo(i, info);
+            if (info.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                Log.d(TAG, "Camera found");
+                frontcameraId = i;
+                break;
+            }
+        }
+        for (int i = 0; i < numberOfCameras; i++) {
+            Camera.CameraInfo info = new Camera.CameraInfo();
+            Camera.getCameraInfo(i, info);
+            if (info.facing == Camera.CameraInfo.CAMERA_FACING_BACK) {
+                Log.d(TAG, "Camera found");
+                backcameraId = i;
+                break;
+            }
+        }
+        cameraId = backcameraId;
+        mCamera = open(cameraId);
+
         mCamera.setFaceDetectionListener(faceDetectionListener);
         mCamera.startFaceDetection();
         try {
